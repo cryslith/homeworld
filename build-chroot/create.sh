@@ -30,7 +30,7 @@ then
 fi
 
 mkdir -m 'u=rwx,go=rx' "${HOMEWORLD_CHROOT}"
-sudo debootstrap --include="$(cat packages.list | grep -vE '^#' | tr '\n ' ',,' | sed 's/,$//' | sed 's/,,/,/g')" stretch "${HOMEWORLD_CHROOT}" http://debian.csail.mit.edu/debian/
+sudo debootstrap --include="$(cat packages.list | grep -vE '^#' | tr '\n ' ',,' | sed 's/,$//' | sed 's/,,/,/g')" stretch "${HOMEWORLD_CHROOT}" http://deb.debian.org/debian/
 # TODO: build our own Bazel, rather than grabbing it from Google's repo
 ./install-bazel.sh --root "${HOMEWORLD_CHROOT}"
 sudo chroot "${HOMEWORLD_CHROOT}" groupadd "$(id -gn)" -g "$(id -g)"

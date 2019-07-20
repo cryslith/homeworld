@@ -8,14 +8,14 @@ trap "rm -r $WORK" EXIT
 
 cd $WORK
 
-curl -sO 'http://debian.csail.mit.edu/debian/dists/stretch/Release'
-curl -sO 'http://debian.csail.mit.edu/debian/dists/stretch/Release.gpg'
+curl -sLO 'http://deb.debian.org/debian/dists/stretch/Release'
+curl -sLO 'http://deb.debian.org/debian/dists/stretch/Release.gpg'
 
 echo 'verifying Release against debian-archive-keyring' >&2
 gpg --no-default-keyring --keyring "/usr/share/keyrings/debian-archive-keyring.gpg" --quiet --verify Release.gpg Release 2>/dev/null >/dev/null || (echo [failed] >&2 && false)
 echo [success] >&2
 
-curl -sO "http://debian.csail.mit.edu/debian/dists/stretch/main/installer-amd64/$VERSION/images/SHA256SUMS"
+curl -sLO "http://deb.debian.org/debian/dists/stretch/main/installer-amd64/$VERSION/images/SHA256SUMS"
 
 echo 'verifying SHA256SUMS against Release' >&2
 # [tail] because the sha256's are after the md5's :P
