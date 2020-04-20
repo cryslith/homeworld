@@ -13,6 +13,7 @@ py_resources(
         "servicemap.yaml",
         "setup.yaml",
         "setup-schema.yaml",
+        "ssh_config",
         "sshd_config",
     ],
     visibility = ["//visibility:public"],

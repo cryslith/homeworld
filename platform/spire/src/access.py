@@ -10,6 +10,7 @@ import traceback
 import authority
 import command
 import configuration
+import resource
 import setup
 import util
 
@@ -321,10 +322,31 @@ def pull_supervisor_key_from(source_file):
     pull_supervisor_key(util.readfile(source_file).decode().strip().split("\n"))
 
 
+@command.wrap
+def generate_ssh_config():
+    'generate an ssh config for accessing nodes'
+    config_template = resource.get('//spire/resources:ssh_config').decode()
+
+    config_fragments = []
+    kind_numbers = {}
+    for node in configuration.get_config().nodes:
+        kind_number = kind_numbers.get(node.kind, 0)
+        kind_numbers[node.kind] = kind_number + 1
+        config_fragments.append(config_template.format(
+            hostname=node.hostname,
+            aliases='{}{}'.format(node.kind, kind_number),
+        ))
+
+    project_dir = configuration.get_project()
+    config_path = os.path.join(project_dir, "ssh_config")
+    util.writefile(config_path, '\n\n'.join(config_fragments).encode())
+
+
 etcdctl_command = dispatch_etcdctl
 kubectl_command = dispatch_kubectl
 foreach_command = ssh_foreach
 main_command = command.Mux("commands about establishing access to a cluster", {
+    "generate-ssh-config": generate_ssh_config,
     "ssh": access_ssh,
 
     "update-known-hosts": update_known_hosts,

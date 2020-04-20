@@ -1,0 +1,8 @@
+Host {hostname} {aliases}
+    HostName {hostname}
+    StrictHostKeyChecking yes
+    User root
+    IdentityFile ssh-key
+    IdentityFile ssh-bootstrap-key
+    IdentitiesOnly yes
+    UserKnownHostsFile known-hosts
