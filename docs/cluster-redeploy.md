@@ -21,13 +21,13 @@ Make sure to verify that you have the correct commit hash, out of band.
 
 ## Configuring SSH
 
-Configure SSH so that it has the correct certificate authority in ~/.ssh/known_hosts for members of the cluster:
+Configure SSH so that it has the correct configuration for members of the cluster:
 
-    $ spire access update-known-hosts
+    $ spire access ssh-config
 
 ## Building the ISO
 
-    $ spire iso gen preseeded.iso ~/.ssh/id_rsa.pub   # this SSH key is used for direct access during cluster setup
+    $ spire iso gen preseeded.iso
 
 Now you should burn and/or upload `preseeded.iso`
 so that you can use it for installing servers.
@@ -89,21 +89,11 @@ so that VNC can communicate through it.
   - Select `Install`
   - Enter the IP address for the server (see `setup.yaml`)
   - Wait a while
-  - Enter "manual" for the bootstrap token (so that your SSH keys will work)
-- Log into the server directly with your SSH keys
-  - For example, ``ssh root@egg-sandwich.mit.edu true``.
-    You might need to remove previous SSH host keys from known_hosts
-    if you've set up the cluster before.
-  - Verify the host keys based on the text printed before the login console
-
-## Setting up ssh-agent
-
-If you don't already have ssh-agent running:
-
-    $ eval `ssh-agent -s`
-    $ ssh-add
-
-Note that this is a local change that only affects your current session.
+  - Enter "manual" for the bootstrap token
+  - Wait until the server reboots and displays its host key fingerprint
+    on its console
+- Run `spire access ssh-bootstrap` and verify the host keys
+  against the fingerprint displayed on the server console
 
 ## Setting up the supervisor node
 

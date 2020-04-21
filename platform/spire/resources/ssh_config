@@ -2,7 +2,7 @@ Host {hostname} {aliases}
     HostName {hostname}
     StrictHostKeyChecking yes
     User root
-    IdentityFile ssh-key
-    IdentityFile ssh-bootstrap-key
+    IdentityFile {ssh_key}
+    IdentityFile {ssh_bootstrap_key}
     IdentitiesOnly yes
-    UserKnownHostsFile known-hosts
+    UserKnownHostsFile {supervisor_known_hosts} {known_hosts}

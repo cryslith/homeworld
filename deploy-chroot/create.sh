@@ -42,8 +42,6 @@ EOF
 cat >>"${HOMEWORLD_DEPLOY_CHROOT}/home/$USER/.bashrc" <<EOF
 export PS1="\[\033[01;31m\][hyades deploy] \[\033[01;32m\]\u\[\033[00m\] \[\033[01;34m\]\w\[\033[00m\]\$ "
 EOF
-mkdir -m 'u=rwx,go=' "${HOMEWORLD_DEPLOY_CHROOT}/home/$USER/.ssh"
-ssh-keygen -t rsa -N "" -f "${HOMEWORLD_DEPLOY_CHROOT}/home/$USER/.ssh/id_rsa"
 echo "127.0.0.1 $(basename "$HOMEWORLD_DEPLOY_CHROOT")" | sudo bash -c "cat >>'$HOMEWORLD_DEPLOY_CHROOT/etc/hosts'"
 
 echo "Done!"

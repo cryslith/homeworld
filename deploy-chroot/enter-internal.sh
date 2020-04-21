@@ -10,4 +10,4 @@ else
     echo 'note: no kvm support; not creating /dev/kvm' >&2
 fi
 cd /cluster
-exec ssh-agent bash
+exec bash

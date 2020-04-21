@@ -576,17 +576,14 @@ def auto_launch_nodes(ops: command.Operations, tc: TerminationContext, nodes: li
 
 
 @command.wrapseq
-def auto_install(ops: command.Operations, authorized_key=None, persistent: bool=False, cdrom_install: bool=False, debug_qemu: bool=False):
+def auto_install(ops: command.Operations, persistent: bool=False, cdrom_install: bool=False, debug_qemu: bool=False):
     "complete cluster installation and launch"
-    if authorized_key is None:
-        if "HOME" not in os.environ:
-            command.fail("expected $HOME to be set for authorized_key autodetect")
-        authorized_key = os.path.join(os.getenv("HOME"), ".ssh/id_rsa.pub")
     project, config = configuration.get_project(), configuration.get_config()
+
     iso_path = os.path.join(project, "cluster-%d.iso" % os.getpid())
     ops.add_operation("check nested virtualization", qemu_check_nested_virt)
-    ops.add_operation("update known hosts", access.update_known_hosts)
-    ops.add_operation("generate ISO", lambda: iso.gen_iso(iso_path, authorized_key, "serial"))
+    ops.add_operation("generate ssh config", access.generate_ssh_config)
+    ops.add_operation("generate ISO", lambda: iso.gen_iso(iso_path, "serial"))
     with ops.context("networking", net_context()):
         with ops.context("termination", TerminationContext()) as tc:
             with ops.context("debug shell", DebugContext(persistent)):

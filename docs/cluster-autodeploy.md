@@ -16,7 +16,6 @@ via the `/lock` bot on mattermost.
 
 ## Autodeploy
 
-    $ eval `ssh-agent -s` && ssh-add  # if not already running
     $ spire virt auto install
 
 That's it.

@@ -50,8 +50,22 @@ MODES={"serial": mode_serial}
 
 
 @command.wrap
-def gen_iso(iso_image, authorized_key, mode=None):
+def gen_iso(iso_image, mode=None):
     "generate ISO"
+
+    project = configuration.get_project()
+    authorized_key = os.path.join(project, "ssh-bootstrap-key")
+    if not os.path.exists(authorized_key):
+        subprocess.check_call([
+            'ssh-keygen',
+            '-q',
+            '-t', 'rsa',
+            '-b', '2048',
+            '-N', '',
+            '-f', authorized_key,
+        ])
+        print('generated ssh-bootstrap-key')
+
     with tempfile.TemporaryDirectory() as d:
         config = configuration.get_config()
         inclusion = []
@@ -60,7 +74,7 @@ def gen_iso(iso_image, authorized_key, mode=None):
             outfile.write(setup.dns_bootstrap_lines())
 
         inclusion += ["dns_bootstrap_lines"]
-        util.copy(authorized_key, os.path.join(d, "authorized.pub"))
+        util.copy(authorized_key + '.pub', os.path.join(d, "authorized.pub"))
         util.writefile(os.path.join(d, "keyservertls.pem"), authority.get_pubkey_by_filename("./clusterca.pem"))
         inclusion += ["authorized.pub", "keyservertls.pem"]
 

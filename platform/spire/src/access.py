@@ -1,3 +1,4 @@
+from inspect import cleandoc
 from typing import Tuple
 import base64
 import binascii
@@ -136,42 +137,18 @@ def refresh_cert(key_path, cert_path, ca_path, variant, ca_key_name, ca_cert_nam
 
 
 @command.wrap
-def access_ssh(no_add_to_agent: bool=False):
+def access_ssh():
     """
     request SSH access to the cluster
-
-    no_add_to_agent: do not add the resulting ssh key to ssh-agent
     """
     keypath = renew_ssh_cert()
     print("===== v CERTIFICATE DETAILS v =====")
     subprocess.check_call(["ssh-keygen", "-L", "-f", keypath + "-cert.pub"])
     print("===== ^ CERTIFICATE DETAILS ^ =====")
-    if not no_add_to_agent:
-        # TODO: clear old identities
-        try:
-            ssh_add_output = subprocess.check_output(["ssh-add", "--", keypath], stderr=subprocess.STDOUT)
-            # if the user is using gnome, gnome-keyring might
-            # masquerade as ssh-agent and provide a zero exit
-            # code despite failing to add the certificate
-            if b"add failed" in ssh_add_output:
-                fail_hint = "do you have an ssh-agent?\n" \
-                    "(gnome-keyring does not count)"
-                command.fail("*** ssh-add failed! ***", fail_hint)
-        except subprocess.CalledProcessError:
-            fail_hint = "ssh-add returned non-zero exit code. do you have an ssh-agent?"
-            command.fail("*** ssh-add failed! ***", fail_hint)
 
 
-HOMEWORLD_KNOWN_HOSTS_MARKER = "homeworld-keydef"
-
-
-def _is_homeworld_keydef_line(line):
-    return line.startswith("@cert-authority ") and line.endswith(" " + HOMEWORLD_KNOWN_HOSTS_MARKER)
-
-
-def _replace_cert_authority(known_hosts_lines: list, machine_list: str, pubkey: bytes) -> list:
+def _known_hosts(machine_list: str, pubkey: bytes) -> str:
     pubkey_parts = pubkey.split(b" ")
-
     if len(pubkey_parts) != 2:
         command.fail("invalid CA pubkey while parsing certificate authority")
     if pubkey_parts[0] != b"ssh-rsa":
@@ -181,36 +158,24 @@ def _replace_cert_authority(known_hosts_lines: list, machine_list: str, pubkey: 
     except binascii.Error as e:
         command.fail("invalid base64-encoded pubkey: %s" % e)
 
-    rebuilt = [line for line in known_hosts_lines if not _is_homeworld_keydef_line(line)]
     # machine_list is trusted and locally-generated, so no validation is necessary
-    rebuilt.append("@cert-authority %s ssh-rsa %s %s"
-                   % (machine_list, base64.b64encode(b64data).decode(), HOMEWORLD_KNOWN_HOSTS_MARKER))
-    return rebuilt
-
-
-def get_known_hosts_path() -> str:
-    homedir = os.getenv("HOME")
-    if homedir is None:
-        command.fail("could not determine home directory, so could not find ~/.ssh/known_hosts")
-    return os.path.join(homedir, ".ssh", "known_hosts")
+    return "@cert-authority {} ssh-rsa {}\n".format(
+        machine_list,
+        base64.b64encode(b64data).decode(),
+    )
 
 
 @command.wrap
-def update_known_hosts():
-    "update ~/.ssh/known_hosts file with @ca-certificates directive"
-    config = configuration.Config.load_from_project()
+def generate_known_hosts():
+    "generate known_hosts file with @ca-certificates directive"
+    config = configuration.get_config()
     machines = ",".join("%s.%s" % (node.hostname, config.external_domain) for node in config.nodes)
     cert_authority_pubkey = authority.get_pubkey_by_filename("./ssh-host.pub")
-    known_hosts_path = get_known_hosts_path()
-    known_hosts_old = util.readfile(known_hosts_path).decode().split("\n") if os.path.exists(known_hosts_path) else []
+    known_hosts_path = os.path.join(configuration.get_project(), "known_hosts")
 
-    if known_hosts_old and not known_hosts_old[-1]:
-        known_hosts_old.pop()
-
-    known_hosts_new = _replace_cert_authority(known_hosts_old, machines, cert_authority_pubkey)
-
-    util.writefile(known_hosts_path, ("\n".join(known_hosts_new) + "\n").encode())
-    print("~/.ssh/known_hosts updated")
+    known_hosts_new = _known_hosts(machines, cert_authority_pubkey)
+    util.writefile(known_hosts_path, known_hosts_new.encode())
+    print("generated known_hosts")
 
 
 def call_etcdctl(params: list, return_result: bool):
@@ -304,51 +269,81 @@ def hostkeys_by_fingerprint(node: configuration.Node, fingerprints: list):
 def pull_supervisor_key(fingerprints):
     config = configuration.get_config()
     node = config.keyserver
-    known_hosts = get_known_hosts_path()
-
-    for remove in ["%s.%s" % (node.hostname, config.external_domain), str(node.ip)]:
-        subprocess.check_call(["ssh-keygen", "-f", known_hosts, "-R", remove],
-                              stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-
+    known_hosts = os.path.join(configuration.get_project(), "supervisor_known_hosts")
     keys = hostkeys_by_fingerprint(node, fingerprints)
-    with open(known_hosts, "a") as f:
+    with open(known_hosts, "w") as f:
         for key in keys:
             f.write("%s.%s %s\n" % (node.hostname, config.external_domain, key))
+    print('wrote supervisor_known_hosts')
 
 
 @command.wrap
 def pull_supervisor_key_from(source_file):
-    "update ~/.ssh/known_hosts file with the supervisor host keys, based on their known hashes"
+    "update supervisor_known_hosts file with the supervisor host keys, based on their known hashes"
     pull_supervisor_key(util.readfile(source_file).decode().strip().split("\n"))
 
 
 @command.wrap
 def generate_ssh_config():
     'generate an ssh config for accessing nodes'
-    config_template = resource.get('//spire/resources:ssh_config').decode()
+    generate_known_hosts()
 
-    config_fragments = []
+    project, config = configuration.get_project(), configuration.get_config()
+    template = resource.get('//spire/resources:ssh_config').decode()
+
+    fragments = []
     kind_numbers = {}
-    for node in configuration.get_config().nodes:
+    for node in config.nodes:
         kind_number = kind_numbers.get(node.kind, 0)
         kind_numbers[node.kind] = kind_number + 1
-        config_fragments.append(config_template.format(
-            hostname=node.hostname,
-            aliases='{}{}'.format(node.kind, kind_number),
+        fragments.append(template.format(
+            hostname=node.external_dns_name(),
+            aliases=' '.join([
+                node.hostname,
+                '{}{}'.format(node.kind, kind_number),
+                str(node.ip),
+            ]),
+            ssh_key=os.path.join(project, 'ssh-key'),
+            ssh_bootstrap_key=os.path.join(project, 'ssh-bootstrap-key'),
+            known_hosts=os.path.join(project, 'known_hosts'),
+            supervisor_known_hosts=os.path.join(project, 'supervisor_known_hosts'),
         ))
 
-    project_dir = configuration.get_project()
-    config_path = os.path.join(project_dir, "ssh_config")
-    util.writefile(config_path, '\n\n'.join(config_fragments).encode())
+    # ensure this is always set in case we accidentally try to ssh to
+    # some other server
+    fragments.append(cleandoc('''
+        Host *
+            StrictHostKeyChecking yes
+        ''') + '\n')
 
+    output_path = os.path.join(project, "ssh_config")
+    util.writefile(output_path, '\n'.join(fragments).encode())
+    print('generated ssh_config')
+
+
+@command.wrap
+def manual_ssh_bootstrap():
+    config, project = configuration.get_config(), configuration.get_project()
+    known_hosts = os.path.join(project, 'supervisor_known_hosts')
+    try:
+        os.remove(known_hosts)
+    except FileNotFoundError:
+        pass
+    subprocess.check_call([
+        'ssh',
+        '-F', os.path.join(project, 'ssh_config'),
+        '-o', 'StrictHostKeyChecking=no',
+        '-o', 'UserKnownHostsFile={}'.format(known_hosts),
+        config.keyserver.external_dns_name(),
+        '--', 'true'
+    ])
 
 etcdctl_command = dispatch_etcdctl
 kubectl_command = dispatch_kubectl
 foreach_command = ssh_foreach
 main_command = command.Mux("commands about establishing access to a cluster", {
-    "generate-ssh-config": generate_ssh_config,
+    "ssh-config": generate_ssh_config,
     "ssh": access_ssh,
-
-    "update-known-hosts": update_known_hosts,
+    "ssh-bootstrap": manual_ssh_bootstrap,
     "pull-supervisor-key": pull_supervisor_key_from,
 })

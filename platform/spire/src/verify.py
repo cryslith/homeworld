@@ -87,14 +87,9 @@ def check_ssh_with_certs(hostname=None):
         node = config.keyserver
     else:
         node = config.get_node(hostname)
-    env = dict(os.environ)
-    if "SSH_AUTH_SOCK" in env:
-        del env["SSH_AUTH_SOCK"]
-    if "SSH_AGENT_PID" in env:
-        del env["SSH_AGENT_PID"]
     keypath = access.renew_ssh_cert()
     try:
-        result = subprocess.check_output(ssh.SSH_BASE + ["-i", keypath, ssh.ssh_get_login(node), "echo", "confirmed"], env=env)
+        result = ssh.check_ssh_output(node, 'echo confirmed', ssh_options=["-i", keypath])
     except subprocess.CalledProcessError as e:
         command.fail("ssh check failed: %s" % e)
     if result != b"confirmed\n":
@@ -131,7 +126,14 @@ def expect_prometheus_query_bool(query, message, accept_missing=False):
 def check_supervisor_accessible(insecure: bool=False):
     "check whether the supervisor node is accessible over ssh"
     config = configuration.get_config()
-    ssh.check_ssh(config.keyserver, "true", insecure=insecure)
+    ssh.check_ssh(
+        config.keyserver,
+        "true",
+        ssh_options=[
+            '-o', 'StrictHostKeyChecking=no',
+            '-o', 'UserKnownHostsFile=/dev/null',
+        ] if insecure else [],
+    )
 
 
 @command.wrap

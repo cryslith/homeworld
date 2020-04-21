@@ -164,7 +164,7 @@ def update_keygateway(ops: command.Operations) -> None:
 def setup_supervisor_ssh(ops: command.Operations) -> None:
     "configure supervisor SSH access"
 
-    config = configuration.get_config()
+    config, project = configuration.get_config(), configuration.get_project()
     for node in config.nodes:
         if node.kind != "supervisor":
             continue
@@ -175,6 +175,14 @@ def setup_supervisor_ssh(ops: command.Operations) -> None:
                 "if [ -f /root/.ssh/authorized_keys ]; then " +
                 "mv /root/.ssh/authorized_keys " +
                 "/root/original_authorized_keys; fi")
+
+    # remove supervisor_known_hosts so we don't trust those host keys forever
+    def remove_known_hosts():
+        try:
+            os.remove(os.path.join(project, 'supervisor_known_hosts'))
+        except FileNotFoundError:
+            pass
+    ops.add_operation('remove supervisor_known_hosts', remove_known_hosts)
 
 
 def modify_dns_bootstrap(ops: command.Operations, is_install: bool) -> None:
